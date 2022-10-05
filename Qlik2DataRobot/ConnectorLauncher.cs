@@ -99,6 +99,10 @@ namespace Qlik2DataRobot
 
             ServerCredentials sslCredentials = null;
 
+            Logger.Info("==============================================================");
+            Logger.Info("= This is a test to ensure that the release has new changes. =");
+            Logger.Info("==============================================================");
+
             Logger.Info("Looking for certificates according to certificateFolderFullPath in config file.");
 
             if (certificateFolder.Length > 3)
