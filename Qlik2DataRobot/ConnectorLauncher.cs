@@ -71,21 +71,6 @@ namespace Qlik2DataRobot
                 printMessage(Convert.ToInt32(appSettings["grpcPort"]), metricsRunningPort, Assembly.GetExecutingAssembly().GetName().Version);
             }
 
-            //foreach (DictionaryEntry de in Environment.GetEnvironmentVariables())
-            //    Console.WriteLine("  {0} = {1}", de.Key, de.Value);
-            /*string loglevel = Environment.GetEnvironmentVariable("QLIK2DATAROBOT_LOG_LEVEL");
-
-
-            if(LogManager.Configuration.LoggingRules.Count == 1 && loglevel != null)
-            {
-               
-                LogManager.Configuration.LoggingRules[0].SetLoggingLevels(LogLevel.FromString(loglevel), LogLevel.Fatal);
-                LogManager.ReconfigExistingLoggers();
-               
-            }*/
-            
-
-
             Logger.Debug(Assembly.GetExecutingAssembly().GetName().Version.ToString());
             Logger.Info(
                 $"{Path.GetFileName(Assembly.GetExecutingAssembly().Location)} uses NLog. Set log level by adding or changing logger rules in NLog.config, setting minLevel=\"Info\" or \"Debug\" or \"Trace\".");

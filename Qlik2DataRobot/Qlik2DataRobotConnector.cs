@@ -171,59 +171,60 @@ namespace Qlik2DataRobot
            
             string api_token = Convert.ToString(config.auth_config.api_token);
             string datarobot_key = config.auth_config.datarobot_key;
-
             string host = config.auth_config.endpoint;
+            if (host.Substring(host.Length - 2) != "/") host = host + "/";
+
             string project_id = config.project_id;
+            string project_name = Convert.ToString(config.project_name);
+
             string model_id = config.model_id;
             string deployment_id = config.deployment_id;
             string keyField = config.keyfield;
+            string dataset_name = Convert.ToString(config.dataset_name);
+            string dataset_id = Convert.ToString(config.dataset_id);
 
             MemoryStream result = new MemoryStream();
             switch (config.request_type)
             {
+                case "actuals":
+                    Logger.Info($"{reqHash} - Sending actuals");
+
+                    var actualszippeddatasetstream = await CompressStream(rowdatastream, "Actuals", reqHash);
+                    Logger.Info($"{reqHash} - Zipped Data Size: {actualszippeddatasetstream.Length}");
+                    
+                    Logger.Info($"{reqHash} - dataset_id (optional): {dataset_id}");
+                    result = await dr.SendActualsAsync(host, api_token, actualszippeddatasetstream, deployment_id, keyField, dataset_id);
+                    break;
+
                 case "dataset":
                     Logger.Info($"{reqHash} - Create dataset");
-                    string dataset_name = Convert.ToString(config.dataset_name);
                     Logger.Info($"{reqHash} - Dataset name - {dataset_name}");
 
                     var zippeddatasetstream = await CompressStream(rowdatastream, dataset_name, reqHash);
                     Logger.Info($"{reqHash} - Zipped Data Size: {zippeddatasetstream.Length}");
 
-                    string dataset_endpoint = Convert.ToString(config.auth_config.endpoint);
-                    if (dataset_endpoint.Substring(dataset_endpoint.Length - 2) != "/") dataset_endpoint = dataset_endpoint + "/";
-                    
                     Logger.Info($"{reqHash} - Dataset ID from Config: ''");
-                    result = await dr.CreateDatasetAsync(dataset_endpoint, api_token, zippeddatasetstream, dataset_name, datasetId: "");
+                    result = await dr.CreateDatasetAsync(host, api_token, zippeddatasetstream, dataset_name, datasetId: "");
                     break;
 
                 case "datasetversion":
                     Logger.Info($"{reqHash} - Create dataset");
-                    string dataset_version_name = Convert.ToString(config.dataset_name);
-                    Logger.Info($"{reqHash} - Dataset name - {dataset_version_name}");
+                    Logger.Info($"{reqHash} - Dataset name - {dataset_name}");
 
-                    var zippeddatasetversionstream = await CompressStream(rowdatastream, dataset_version_name, reqHash);
+                    var zippeddatasetversionstream = await CompressStream(rowdatastream, dataset_name, reqHash);
                     Logger.Info($"{reqHash} - Zipped Data Size: {zippeddatasetversionstream.Length}");
 
-                    string dataset_version_endpoint = Convert.ToString(config.auth_config.endpoint);
-                    if (dataset_version_endpoint.Substring(dataset_version_endpoint.Length - 2) != "/") dataset_version_endpoint = dataset_version_endpoint + "/";
-                    
-                    string dataset_id = Convert.ToString(config.dataset_id);
                     Logger.Info($"{reqHash} - Dataset ID from Config: {dataset_id}");
-                    result = await dr.CreateDatasetAsync(dataset_version_endpoint, api_token, zippeddatasetversionstream, dataset_version_name, dataset_id);
+                    result = await dr.CreateDatasetAsync(host, api_token, zippeddatasetversionstream, dataset_name, dataset_id);
                     break;
 
                 case "createproject":
                     Logger.Info($"{reqHash} - Create Project");
-                    string project_name = Convert.ToString(config.project_name);
-
                     var zippedstream = await CompressStream(rowdatastream, project_name, reqHash);
                     
                     Logger.Info($"{reqHash} - Zipped Data Size: {zippedstream.Length}");
 
-                    string endpoint = Convert.ToString(config.auth_config.endpoint);
-                    if (endpoint.Substring(endpoint.Length - 2) != "/") endpoint = endpoint + "/";
-                    
-                    result = await dr.CreateProjectsAsync(endpoint, api_token, zippedstream, project_name, project_name + ".zip");
+                    result = await dr.CreateProjectsAsync(host, api_token, zippedstream, project_name, project_name + ".zip");
                     break;
 
                 case "predictapi":
