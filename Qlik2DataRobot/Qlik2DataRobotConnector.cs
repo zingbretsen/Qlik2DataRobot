@@ -13,6 +13,7 @@ using Qlik.Sse;
 using Newtonsoft.Json;
 using CsvHelper;
 using System.Reflection;
+using System.IO.Pipes;
 
 namespace Qlik2DataRobot
 {
@@ -172,7 +173,9 @@ namespace Qlik2DataRobot
             string api_token = Convert.ToString(config.auth_config.api_token);
             string datarobot_key = config.auth_config.datarobot_key;
             string host = config.auth_config.endpoint;
+            string mlops_host = config.mlops_endpoint;
             if (host.Substring(host.Length - 2) != "/") host = host + "/";
+            if (mlops_host.Substring(mlops_host.Length - 2) != "/") mlops_host = mlops_host + "/";
 
             string project_id = config.project_id;
             string project_name = Convert.ToString(config.project_name);
@@ -184,92 +187,95 @@ namespace Qlik2DataRobot
             string dataset_id = Convert.ToString(config.dataset_id);
 
             MemoryStream result = new MemoryStream();
-            switch (config.request_type)
+
+            string[] zipped_request_types = { "actuals", "dataset", "datasetversion", "createproject"};
+
+            if (zipped_request_types.Contains(config.request_type))
             {
-                case "actuals":
-                    Logger.Info($"{reqHash} - Sending actuals");
+                var zip_stream = await CompressStream(rowdatastream, dataset_name, reqHash);
+                Logger.Info($"{reqHash} - Zipped Data Size: {zip_stream.Length}");
 
-                    var actualszippeddatasetstream = await CompressStream(rowdatastream, "Actuals", reqHash);
-                    Logger.Info($"{reqHash} - Zipped Data Size: {actualszippeddatasetstream.Length}");
-                    
-                    Logger.Info($"{reqHash} - dataset_id (optional): {dataset_id}");
-                    result = await dr.SendActualsAsync(host, api_token, actualszippeddatasetstream, deployment_id, keyField, dataset_id);
-                    break;
+                switch (config.request_type)
+                {
+                    case "actuals":
+                        Logger.Info($"{reqHash} - Sending actuals");
+                        Logger.Info($"{reqHash} - dataset_id (optional): '{dataset_id}'");
+                        if (String.IsNullOrEmpty(dataset_name))
+                        {
+                            dataset_name = "Actuals";
+                        }
 
-                case "dataset":
-                    Logger.Info($"{reqHash} - Create dataset");
-                    Logger.Info($"{reqHash} - Dataset name - {dataset_name}");
+                        Logger.Trace($"{reqHash} - Dataset name: '{dataset_name}'");
 
-                    var zippeddatasetstream = await CompressStream(rowdatastream, dataset_name, reqHash);
-                    Logger.Info($"{reqHash} - Zipped Data Size: {zippeddatasetstream.Length}");
+                        result = await dr.SendActualsAsync(host, api_token, zip_stream, deployment_id, keyField, dataset_name, dataset_id);
+                        break;
 
-                    Logger.Info($"{reqHash} - Dataset ID from Config: ''");
-                    result = await dr.CreateDatasetAsync(host, api_token, zippeddatasetstream, dataset_name, datasetId: "");
-                    break;
+                    case "dataset":
+                        Logger.Info($"{reqHash} - Create dataset");
+                        Logger.Info($"{reqHash} - Dataset name - {dataset_name}");
+                        result = await dr.CreateDatasetAsync2(host, api_token, zip_stream, dataset_name, datasetId: "");
+                        break;
 
-                case "datasetversion":
-                    Logger.Info($"{reqHash} - Create dataset");
-                    Logger.Info($"{reqHash} - Dataset name - {dataset_name}");
+                    case "datasetversion":
+                        Logger.Info($"{reqHash} - Create dataset");
+                        Logger.Info($"{reqHash} - Dataset name - {dataset_name}");
+                        Logger.Info($"{reqHash} - Dataset ID from Config: {dataset_id}");
+                        result = await dr.CreateDatasetAsync(host, api_token, zip_stream, dataset_name, dataset_id);
+                        break;
 
-                    var zippeddatasetversionstream = await CompressStream(rowdatastream, dataset_name, reqHash);
-                    Logger.Info($"{reqHash} - Zipped Data Size: {zippeddatasetversionstream.Length}");
+                    case "createproject":
+                        Logger.Info($"{reqHash} - Create Project");
+                        result = await dr.CreateProjectsAsync(host, api_token, zip_stream, project_name, project_name + ".zip");
+                        break;
 
-                    Logger.Info($"{reqHash} - Dataset ID from Config: {dataset_id}");
-                    result = await dr.CreateDatasetAsync(host, api_token, zippeddatasetversionstream, dataset_name, dataset_id);
-                    break;
+                    default:
+                        break;
+                }
+            } else
+            {
+                switch (config.request_type)
+                {
+                    case "predictapi":
+                        Logger.Info($"{reqHash} - Predict API");
 
-                case "createproject":
-                    Logger.Info($"{reqHash} - Create Project");
-                    var zippedstream = await CompressStream(rowdatastream, project_name, reqHash);
-                    
-                    Logger.Info($"{reqHash} - Zipped Data Size: {zippedstream.Length}");
+                        int maxCodes = 0;
+                        double thresholdHigh = 0;
+                        double thresholdLow = 0;
+                        bool explain = false;
 
-                    result = await dr.CreateProjectsAsync(host, api_token, zippedstream, project_name, project_name + ".zip");
-                    break;
+                        if (config.explain != null)
+                        {
+                            maxCodes = config.explain.max_codes;
+                            thresholdHigh = config.explain.threshold_high;
+                            thresholdLow = config.explain.threshold_low;
+                            explain = true;
+                        }
 
-                case "predictapi":
-                    Logger.Info($"{reqHash} - Predict API");
-                                        
-                    
+                        result = await dr.PredictApiAsync(rowdatastream, api_token, datarobot_key, host, deployment_id: deployment_id, project_id: project_id, model_id: model_id, keyField: keyField, explain: explain, maxCodes: maxCodes, thresholdHigh: thresholdHigh, thresholdLow: thresholdLow);
+                        break;
 
-                    int maxCodes = 0;
-                    double thresholdHigh = 0;
-                    double thresholdLow = 0;
-                    bool explain = false;
+                    case "timeseries":
+                        Logger.Info($"{reqHash} - Time Series Prediction API");
 
-                    if (config.explain != null)
-                    {
-                        maxCodes = config.explain.max_codes;
-                        thresholdHigh = config.explain.threshold_high;
-                        thresholdLow = config.explain.threshold_low;
-                        explain = true;
-                    }
-
-                    result = await dr.PredictApiAsync(rowdatastream, api_token, datarobot_key, host, deployment_id:deployment_id, project_id:project_id, model_id:model_id, keyField:keyField, explain:explain, maxCodes:maxCodes, thresholdHigh:thresholdHigh, thresholdLow:thresholdLow);
-                    break;
-
-                case "timeseries":
-                    Logger.Info($"{reqHash} - Time Series Prediction API");
-                    
-                    string forecast_point = null;
-
-                    
-
-                    if (config.forecast_point != null)
-                    {
-                        forecast_point = Convert.ToString(config.forecast_point);
-                        //forecast_point = config.forecast_point.ToString("s");
-                    }
+                        string forecast_point = null;
 
 
-                    result = await dr.TimeSeriesAsync(rowdatastream, api_token, datarobot_key, host, deployment_id: deployment_id, project_id: project_id, model_id: model_id, forecast_point: forecast_point);
-                    break;
 
-                default:
-                    break;
+                        if (config.forecast_point != null)
+                        {
+                            forecast_point = Convert.ToString(config.forecast_point);
+                            //forecast_point = config.forecast_point.ToString("s");
+                        }
+                        result = await dr.TimeSeriesAsync(rowdatastream, api_token, datarobot_key, host, deployment_id: deployment_id, project_id: project_id, model_id: model_id, forecast_point: forecast_point);
+                        break;
+
+                    default:
+                        break;
+                }
             }
 
             Logger.Info($"{reqHash} - DataRobot Finish");
+            Logger.Trace($"{reqHash} - Result {result}");
             return result;
         }
 

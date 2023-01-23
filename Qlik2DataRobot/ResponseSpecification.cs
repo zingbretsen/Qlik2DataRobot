@@ -53,4 +53,9 @@ namespace Qlik2DataRobot
         public string qualitativeStrength { get; set; }
         public dynamic label { get; set; } 
     }
+
+    class DatasetUploadStatus
+    {
+        public string datasetStatus { get; set; }
+    }
 }

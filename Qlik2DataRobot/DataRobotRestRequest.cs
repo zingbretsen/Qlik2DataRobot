@@ -134,52 +134,42 @@ namespace Qlik2DataRobot
             Logger.Trace($"{reqHash} - Headers: {requestContent.Headers}");
             Logger.Trace($"{reqHash} - Finished Building Request");
 
-
+            Logger.Trace($"{reqHash} - Dataset ID: '{datasetId}'");
             var url = "datasets";
-            if (datasetId != "") { url = $"{url}/{datasetId}/versions"; }
+            Logger.Trace($"{reqHash} - String.IsNullOrEmpty(datasetId)? {String.IsNullOrEmpty(datasetId)}");
+            //if (String.IsNullOrEmpty(datasetId)) { url = $"{url}/{datasetId}/versions"; }
             url = $"{url}/fromFile/";
 
             Logger.Trace($"{reqHash} - Sending to url: {url}");
             dynamic catalogId;
             dynamic catalogVersionId;
 
-            try
+
+            HttpResponseMessage response = await checkRedirectAuth(client, await client.PostAsync(url, requestContent), null);
+            Logger.Trace($"{reqHash} - Status Code: {response.StatusCode}");
+            Logger.Debug($"{reqHash} - Upload Finished - Starting Registration");
+
+            string responseContent = await response.Content.ReadAsStringAsync();
+            Logger.Trace($"{reqHash} - Response Content: {responseContent}");
+
+            Dictionary<string, dynamic> responseobj = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(responseContent);
+
+            if (responseobj.ContainsKey("catalogId"))
             {
-                HttpResponseMessage response = await checkRedirectAuth(client, await client.PostAsync(url, requestContent), null);
-                Logger.Trace($"{reqHash} - Status Code: {response.StatusCode}");
-                Logger.Debug($"{reqHash} - Upload Finished - Starting Registration");
-
-                string responseContent = await response.Content.ReadAsStringAsync();
-                Dictionary<string, dynamic> responseobj = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(responseContent);
-
-                if (responseobj.ContainsKey("catalogId"))
-                {
-                    Logger.Info($"{reqHash} - Successfully pushed Dataset");
-                    responseobj.TryGetValue("catalogId", out catalogId);
-                    Logger.Info($"{reqHash} - Dataset ID (): {catalogId}");
-                } else
-                {
-                    catalogId = "";
-                }
-
-                if (responseobj.ContainsKey("catalogVersionId"))
-                {
-                    Logger.Info($"{reqHash} - Successfully pushed Dataset");
-                    responseobj.TryGetValue("catalogVersionId", out catalogVersionId);
-                    Logger.Info($"{reqHash} - Dataset Version ID (): {catalogVersionId}");
-                }
-                streamWriter.WriteLine("{\"status\":\"success\",\"response\":" + responseContent + "}");
-
-            }
-            catch (Exception e)
+                Logger.Info($"{reqHash} - Successfully pushed Dataset");
+                responseobj.TryGetValue("catalogId", out catalogId);
+                Logger.Info($"{reqHash} - Dataset ID (): {catalogId}");
+            } else
             {
-                Logger.Warn($"{reqHash} - Create dataset Error");
-                Logger.Warn($"{reqHash} - Error: {e.Message}");
-                streamWriter.WriteLine("{\"status\":\"error\"}");
-                catalogId = "";
-                catalogVersionId = "";
+                throw new NullReferenceException("catalogId is null.");
             }
 
+            if (responseobj.ContainsKey("catalogVersionId"))
+            {
+                Logger.Info($"{reqHash} - Successfully pushed Dataset");
+                responseobj.TryGetValue("catalogVersionId", out catalogVersionId);
+                Logger.Info($"{reqHash} - Dataset Version ID (): {catalogVersionId}");
+            }
 
             return catalogId;
         }
@@ -220,14 +210,11 @@ namespace Qlik2DataRobot
                         Logger.Info($"{reqHash} - Dataset State: {processingState}");
                     }
 
-                    streamWriter.WriteLine("{\"status\":\"success\",\"response\":" + responseContent + "}");
-
                 }
                 catch (Exception e)
                 {
                     Logger.Warn($"{reqHash} - Create dataset Error");
                     Logger.Warn($"{reqHash} - Error: {e.Message}");
-                    streamWriter.WriteLine("{\"status\":\"error\"}");
                     processingState = "ERROR";
                     return processingState;
                 }
@@ -237,17 +224,33 @@ namespace Qlik2DataRobot
             return processingState;
         }
 
-        public async Task<string> SubmitActuals(string baseAddress, string token, string deploymentId, string datasetId, StreamWriter streamWriter)
+        public async Task<string> SubmitActuals(string baseAddress, string token, string deploymentId, string datasetId, string associationIdColumn, string actualValueColumn, StreamWriter streamWriter)
         {
             Logger.Trace($"{reqHash} - Create Client");
             var client = Qlik2DataRobotHttpClientFactory.clientFactory.CreateClient();
             ConfigureAsync(client, baseAddress, token);
             Logger.Trace($"{reqHash} - Configured Client");
 
+            Logger.Trace($"{reqHash} - Building form");
             var requestContent = new MultipartFormDataContent("----");
+
+            Logger.Trace($"{reqHash} - Adding Dataset ID: {datasetId}");
+            StringContent sDatasetId = new StringContent(datasetId);
+            requestContent.Add(sDatasetId, "\"datasetId\"");
+
+            Logger.Trace($"{reqHash} - Adding Association ID Column: {associationIdColumn}");
+            //assocationIdCol = "IdentifierID";
+            StringContent sAssociationIdCol = new StringContent(associationIdColumn);
+            requestContent.Add(sAssociationIdCol, "\"associationIdColumn\"");
+
+            //actualValueColumn = "Target";
+            Logger.Trace($"{reqHash} - Adding Actual Value Column: {actualValueColumn}");
+            StringContent sActualDataCol = new StringContent(actualValueColumn);
+            requestContent.Add(sActualDataCol, "\"actualValueColumn\"");
 
             Logger.Trace($"{reqHash} - Building Request Headers");
             Logger.Trace($"{reqHash} - Headers: {requestContent.Headers}");
+            Logger.Trace($"{reqHash} - Request Content: {requestContent}");
             Logger.Trace($"{reqHash} - Finished Building Request");
 
 
@@ -262,29 +265,25 @@ namespace Qlik2DataRobot
                 Logger.Trace($"{reqHash} - Status Code: {response.StatusCode}");
 
                 string responseContent = await response.Content.ReadAsStringAsync();
-
-                streamWriter.WriteLine("{\"status\":\"success\",\"response\":" + responseContent + "}");
-
             }
             catch (Exception e)
             {
                 Logger.Warn($"{reqHash} - Create dataset Error");
                 Logger.Warn($"{reqHash} - Error: {e.Message}");
-                streamWriter.WriteLine("{\"status\":\"error\"}");
-                return "ERROR";
+                return "error";
             }
 
             Logger.Trace($"{reqHash} - : {url}");
 
 
-            return "SUCCESS";
+            return "success";
         }
 
 
         /// <summary>
         /// Send actual values to a deployment
         /// </summary>
-        public async Task<MemoryStream> SendActualsAsync(string baseAddress, string token, MemoryStream data, string deploymentId, string keyField, string datasetId = "")
+        public async Task<MemoryStream> SendActualsAsync(string host, string token, MemoryStream data, string deploymentId, string keyField, string dataset_name = "Actuals", string datasetId = "")
         {
 
             Logger.Trace($"{reqHash} - Starting Send Actuals");
@@ -292,21 +291,26 @@ namespace Qlik2DataRobot
             var streamWriter = new StreamWriter(outStream);
 
             Logger.Trace($"{reqHash} - Sending Dataset");
-            string catalogId = await SendDataset(baseAddress, token, data, "Actuals", streamWriter, datasetId);
+            string catalogId = await SendDataset(host, token, data, dataset_name, streamWriter, datasetId);
 
             Logger.Trace($"{reqHash} - Checking Dataset Status");
-            string status = await CheckDatasetStatus(baseAddress, token, catalogId, streamWriter);
+            string status = await CheckDatasetStatus(host, token, catalogId, streamWriter);
+
             if (status != "COMPLETED") {
                 Logger.Error($"Dataset failed to register: {status}");
+                streamWriter.WriteLine("{\"status\":\"error\",\"response\":{\"id\":\"" + catalogId + "\"}}");
                 streamWriter.Flush();
                 outStream.Position = 0;
                 return outStream;
             }
 
             Logger.Trace($"{reqHash} - Sending Actuals");
-            string actualStatus = await SubmitActuals(baseAddress, token, deploymentId, datasetId, streamWriter);
+            string actualValueColumn = "Target";
+            string associationIdColumn = "IdentiferID";
+            string actualStatus = await SubmitActuals(host, token, deploymentId, datasetId, associationIdColumn, actualValueColumn, streamWriter);
             Logger.Trace($"{reqHash} - Send Actuals - {actualStatus}");
 
+            streamWriter.WriteLine("{\"status\":\"" + actualStatus + "\",\"response\":{\"id\":\"" + catalogId + "\"}}");
             streamWriter.Flush();
             outStream.Position = 0;
             return outStream;
@@ -317,22 +321,24 @@ namespace Qlik2DataRobot
         /// </summary>
         public async Task<MemoryStream> CreateDatasetAsync2(string baseAddress, string token, MemoryStream data, string datasetName, string datasetId = "")
         {
-            Logger.Trace($"{reqHash} - Starting Send Actuals");
+            Logger.Trace($"{reqHash} - Starting Send dataset method 2");
             MemoryStream outStream = new MemoryStream();
             var streamWriter = new StreamWriter(outStream);
 
             Logger.Trace($"{reqHash} - Sending Dataset");
-            string catalogId = await SendDataset(baseAddress, token, data, "Actuals", streamWriter);
+            string catalogId = await SendDataset(baseAddress, token, data, datasetName, streamWriter);
 
             Logger.Trace($"{reqHash} - Checking Dataset Status");
             string status = await CheckDatasetStatus(baseAddress, token, catalogId, streamWriter);
             if (status != "COMPLETED") {
                 Logger.Error($"Dataset failed to register: {status}");
+                streamWriter.WriteLine("{\"status\":\"error\",\"response\":{\"id\":\"err\"}}");
                 streamWriter.Flush();
                 outStream.Position = 0;
                 return outStream;
             }
 
+            streamWriter.WriteLine("{\"status\":\"success\",\"response\":{\"id\":\"" + catalogId + "\"}}");
             streamWriter.Flush();
             outStream.Position = 0;
             return outStream;
