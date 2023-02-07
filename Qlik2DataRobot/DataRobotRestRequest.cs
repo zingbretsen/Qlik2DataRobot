@@ -1,6 +1,9 @@
-﻿using Newtonsoft.Json;
+﻿using CsvHelper;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NLog;
 using System;
+using System.CodeDom;
 using System.Collections.Generic;
 // using System.Data;
 using System.IO;
@@ -8,6 +11,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -25,6 +29,12 @@ namespace Qlik2DataRobot
             reqHash = _reqHash;
         }
 
+        public class Foo
+        {
+            public string columnA { get; set; }
+            public string columnB { get; set; }
+        }
+
 
         /// <summary>
         /// Create a datarobot dataset
@@ -38,7 +48,7 @@ namespace Qlik2DataRobot
             Logger.Trace($"{reqHash} - Configured Client");
 
             var requestContent = new MultipartFormDataContent("----");
-            
+
             Logger.Trace($"{reqHash} - Building Request Headers");
 
             var fileContent = new StreamContent(data);
@@ -64,7 +74,7 @@ namespace Qlik2DataRobot
             // If we passed in a datasetId, create a new version of that dataset
             // Otherwise create a new dataset from file
             var url = "datasets";
-            if (datasetId != "") { url = $"{url}/{datasetId}/versions"; } 
+            if (datasetId != "") { url = $"{url}/{datasetId}/versions"; }
             url = $"{url}/fromFile/";
 
             Logger.Trace($"{reqHash} - Sending to url: {url}");
@@ -97,7 +107,7 @@ namespace Qlik2DataRobot
                     Logger.Info($"{reqHash} - Dataset Version ID (): {catalogVersionId}");
                 }
 
-                streamWriter.WriteLine("{\"status\":\"success\",\"response\":" + responseContent +"}");
+                streamWriter.WriteLine("{\"status\":\"success\",\"response\":" + responseContent + "}");
             }
             catch (Exception e)
             {
@@ -136,9 +146,14 @@ namespace Qlik2DataRobot
 
             Logger.Trace($"{reqHash} - Dataset ID: '{datasetId}'");
             var url = "datasets";
-            Logger.Trace($"{reqHash} - String.IsNullOrEmpty(datasetId)? {String.IsNullOrEmpty(datasetId)}");
-            //if (String.IsNullOrEmpty(datasetId)) { url = $"{url}/{datasetId}/versions"; }
-            url = $"{url}/fromFile/";
+            if (String.IsNullOrEmpty(datasetId))
+            {
+                url = $"{url}/fromFile/";
+            } else
+            {
+                url = $"{url}/{datasetId}/versions/fromFile/";
+
+            }
 
             Logger.Trace($"{reqHash} - Sending to url: {url}");
             dynamic catalogId;
@@ -195,6 +210,7 @@ namespace Qlik2DataRobot
 
             while (processingState == "RUNNING" || processingState == "PENDING")
             {
+                Thread.Sleep(5000);
                 try
                 {
                     HttpResponseMessage response = await checkRedirectAuth(client, await client.GetAsync(url), null);
@@ -224,47 +240,67 @@ namespace Qlik2DataRobot
             return processingState;
         }
 
-        public async Task<string> SubmitActuals(string baseAddress, string token, string deploymentId, string datasetId, string associationIdColumn, string actualValueColumn, StreamWriter streamWriter)
+        public class batchPredictionOptions
+        {
+            public string datasetId { get; set; }
+            public string associationIdColumn { get; set; }
+            public string actualValueColumn { get; set; }
+        }
+
+        public async Task<string> SubmitActuals(string baseAddress, string token, string deploymentId, string datasetId, string associationIdColumn, string actualValueColumn)
         {
             Logger.Trace($"{reqHash} - Create Client");
             var client = Qlik2DataRobotHttpClientFactory.clientFactory.CreateClient();
             ConfigureAsync(client, baseAddress, token);
             Logger.Trace($"{reqHash} - Configured Client");
 
+            batchPredictionOptions options = new batchPredictionOptions
+            {
+                datasetId = datasetId,
+                associationIdColumn = associationIdColumn,
+                actualValueColumn = actualValueColumn
+            };
             Logger.Trace($"{reqHash} - Building form");
-            var requestContent = new MultipartFormDataContent("----");
 
-            Logger.Trace($"{reqHash} - Adding Dataset ID: {datasetId}");
-            StringContent sDatasetId = new StringContent(datasetId);
-            requestContent.Add(sDatasetId, "\"datasetId\"");
+            string json = JsonConvert.SerializeObject(options);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            Console.Write(json);
+            //var requestContent = new MultipartFormDataContent("----");
 
-            Logger.Trace($"{reqHash} - Adding Association ID Column: {associationIdColumn}");
-            //assocationIdCol = "IdentifierID";
-            StringContent sAssociationIdCol = new StringContent(associationIdColumn);
-            requestContent.Add(sAssociationIdCol, "\"associationIdColumn\"");
+            //Logger.Trace($"{reqHash} - Adding Dataset ID: {datasetId}");
+            //StringContent sDatasetId = new StringContent(datasetId);
+            //requestContent.Add(sDatasetId, "\"datasetId\"");
 
-            //actualValueColumn = "Target";
-            Logger.Trace($"{reqHash} - Adding Actual Value Column: {actualValueColumn}");
-            StringContent sActualDataCol = new StringContent(actualValueColumn);
-            requestContent.Add(sActualDataCol, "\"actualValueColumn\"");
+            //Logger.Trace($"{reqHash} - Adding Association ID Column: {associationIdColumn}");
+            ////assocationIdCol = "IdentifierID";
+            //StringContent sAssociationIdCol = new StringContent(associationIdColumn);
+            //requestContent.Add(sAssociationIdCol, "\"associationIdColumn\"");
 
-            Logger.Trace($"{reqHash} - Building Request Headers");
-            Logger.Trace($"{reqHash} - Headers: {requestContent.Headers}");
-            Logger.Trace($"{reqHash} - Request Content: {requestContent}");
-            Logger.Trace($"{reqHash} - Finished Building Request");
+            ////actualValueColumn = "Target";
+            //Logger.Trace($"{reqHash} - Adding Actual Value Column: {actualValueColumn}");
+            //StringContent sActualDataCol = new StringContent(actualValueColumn);
+            //requestContent.Add(sActualDataCol, "\"actualValueColumn\"");
+
+            //Logger.Trace($"{reqHash} - Building Request Headers");
+            //Logger.Trace($"{reqHash} - Headers: {requestContent.Headers}");
+            //Logger.Trace($"{reqHash} - Request Content: {requestContent}");
+            //Logger.Trace($"{reqHash} - Finished Building Request");
 
 
             string url = $"deployments/{deploymentId}/actuals/fromDataset/";
 
+            Console.Write(url);
             Logger.Trace($"{reqHash} - Sending to url: {url}");
 
             try
             {
-                HttpResponseMessage response = await checkRedirectAuth(client, await client.PostAsync(url, requestContent), null);
+                //HttpResponseMessage response = await checkRedirectAuth(client, await client.PostAsync(url, requestContent), null);
+                HttpResponseMessage response = await checkRedirectAuth(client, await client.PostAsync(url, content), null);
                 Logger.Trace($"{reqHash} - Submitting Actuals");
                 Logger.Trace($"{reqHash} - Status Code: {response.StatusCode}");
 
                 string responseContent = await response.Content.ReadAsStringAsync();
+                return responseContent;
             }
             catch (Exception e)
             {
@@ -279,11 +315,154 @@ namespace Qlik2DataRobot
             return "success";
         }
 
+        public class intakeOptions
+        {
+            public string type { get; set; }
+            public string datasetId {get; set; }
+        }
+
+        public class batchOptions
+        {
+            public string deploymentId { get; set; }
+            public string passthroughColumnsSet { get; set; }
+            public bool skipDriftTracking { get; set; }
+            public bool predictionWarningEnabled { get; set; }
+            public string chunkSize { get; set; }
+            public bool includePredictionStatus { get; set; }
+            public intakeOptions intakeSettings { get; set; }
+        }
+
+        class redirectLinks {
+            public string self {get; set;}
+            public string download {get; set;}
+        }
+
+        public async Task<string> SubmitBatch(
+            string baseAddress,
+            string token,
+            string deploymentId,
+            string datasetId,
+            string passthroughColumnsSet="all",
+            bool skipDriftTracking = false,
+            bool predictionWarningEnabled = false,
+            string chunkSize = "auto",
+            bool includePredictionStatus = true
+            )
+        {
+            Logger.Trace($"{reqHash} - Create Client");
+            var client = Qlik2DataRobotHttpClientFactory.clientFactory.CreateClient();
+            ConfigureAsync(client, baseAddress, token);
+
+            Logger.Trace($"{reqHash} - Configuring batch options");
+            batchOptions options = new batchOptions
+            {
+                deploymentId = deploymentId,
+                passthroughColumnsSet = passthroughColumnsSet,
+                skipDriftTracking = skipDriftTracking,
+                predictionWarningEnabled = predictionWarningEnabled,
+                chunkSize = chunkSize,
+                includePredictionStatus = includePredictionStatus,
+                intakeSettings = new intakeOptions
+                {
+                    type = "dataset",
+                    datasetId = datasetId
+                }
+            };
+            string json = JsonConvert.SerializeObject(options);
+            Console.WriteLine($"Sending BatchPrediction requestion with the following config: {json}");
+            var httpContent = new StringContent(json, Encoding.UTF8, "application/json");
+
+            string uri = $"batchPredictions/";
+            HttpResponseMessage response = await client.PostAsync(uri, httpContent);
+            string responseContent = await response.Content.ReadAsStringAsync();
+
+            Logger.Trace($"{reqHash} - Parsing response: {responseContent}");
+            Dictionary<string, dynamic> responseobj = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(responseContent);
+            dynamic status;
+            dynamic jobId;
+            responseobj.TryGetValue("status", out status);
+            responseobj.TryGetValue("id", out jobId);
+
+            string jobIdStr = Convert.ToString(jobId);
+
+            Logger.Trace($"{reqHash} - status: {status}");
+            Logger.Trace($"{reqHash} - jobId: {jobId}");
+
+            int counter=0;
+            while (counter < 60 && !(status.Contains("COMPLETE") || status.Contains("ERROR"))) {
+                counter = counter + 1;
+                Logger.Trace($"{reqHash} - status: {status}");
+                Thread.Sleep(5000);
+                Logger.Trace($"{reqHash} - trying again");
+                if (jobIdStr != "" && (status == "INITIALIZING" || status == "RUNNING")) {
+                    Logger.Trace($"{reqHash} - Getting job {jobIdStr} details");
+                    Uri statusUrl = new Uri($"{baseAddress}batchPredictions/{jobIdStr}");
+                    Logger.Trace($"{reqHash} - status url: {statusUrl}");
+                    response = await checkRedirectAuth(client, await client.GetAsync(statusUrl), statusUrl);
+                    responseContent = await response.Content.ReadAsStringAsync();
+                    responseobj = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(responseContent);
+                    responseobj.TryGetValue("status", out status);
+                } else {
+                    Console.WriteLine(jobIdStr );
+                    Console.WriteLine(status );
+                }
+            }
+
+            if (!status.Contains("COMPLETE")) {
+                throw new ApplicationException("Prediction Job didn't finish successfully.");
+            }
+
+            Console.WriteLine("Trying to download predictions!");
+            Uri downloadUrl = new Uri($"{baseAddress}batchPredictions/{jobIdStr}/download");
+            response = await checkRedirectAuth(client, await client.GetAsync(downloadUrl), downloadUrl);
+            responseContent = await response.Content.ReadAsStringAsync();
+
+            return responseContent;
+        }
 
         /// <summary>
         /// Send actual values to a deployment
         /// </summary>
-        public async Task<MemoryStream> SendActualsAsync(string host, string token, MemoryStream data, string deploymentId, string keyField, string dataset_name = "Actuals", string datasetId = "")
+        public async Task<MemoryStream> ScoreBatchAsync(string host, string token, MemoryStream data, string deploymentId, string keyField, string dataset_name = "Batch", string datasetId = "")
+        {
+
+            Logger.Trace($"{reqHash} - Starting Send Batch");
+            MemoryStream outStream = new MemoryStream();
+            var streamWriter = new StreamWriter(outStream);
+
+            Logger.Trace($"{reqHash} - Sending Dataset");
+            string catalogId = await SendDataset(host, token, data, dataset_name, streamWriter, datasetId);
+
+            Logger.Trace($"{reqHash} - Checking Dataset Status");
+            string status = await CheckDatasetStatus(host, token, catalogId, streamWriter);
+
+            if (status != "COMPLETED")
+            {
+                Logger.Error($"Dataset failed to register: {status}");
+                streamWriter.WriteLine("{\"status\":\"error\",\"response\":{\"id\":\"" + catalogId + "\"}}");
+                streamWriter.Flush();
+                outStream.Position = 0;
+                return outStream;
+            }
+
+            Logger.Trace($"{reqHash} - Starting Batch Scoring");
+            string csv = await SubmitBatch(host, token, deploymentId, datasetId);
+            Logger.Trace($"{reqHash} - Finished Batch Scoring");
+
+            Console.WriteLine("Start of retrieved data:");
+            Console.WriteLine(csv.Substring(0, 200));
+
+            streamWriter.WriteLine("{\"status\":\"" + "success" + "\",\"response\":{\"data\":\"" + csv + "\"}}");
+            streamWriter.Flush();
+            outStream.Position = 0;
+            return outStream;
+        }
+
+
+        /// <summary>
+        /// Send actual values to a deployment
+        /// </summary>
+        public async Task<MemoryStream> SendActualsAsync(string host, string token, MemoryStream data, string deploymentId, string keyField, string dataset_name = "Actuals", string datasetId = "", string actualValueColumn = "target", string associationIdColumn = "id")
         {
 
             Logger.Trace($"{reqHash} - Starting Send Actuals");
@@ -305,9 +484,7 @@ namespace Qlik2DataRobot
             }
 
             Logger.Trace($"{reqHash} - Sending Actuals");
-            string actualValueColumn = "Target";
-            string associationIdColumn = "IdentiferID";
-            string actualStatus = await SubmitActuals(host, token, deploymentId, datasetId, associationIdColumn, actualValueColumn, streamWriter);
+            string actualStatus = await SubmitActuals(host, token, deploymentId, catalogId, associationIdColumn, actualValueColumn);
             Logger.Trace($"{reqHash} - Send Actuals - {actualStatus}");
 
             streamWriter.WriteLine("{\"status\":\"" + actualStatus + "\",\"response\":{\"id\":\"" + catalogId + "\"}}");

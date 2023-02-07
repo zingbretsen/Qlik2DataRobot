@@ -188,7 +188,7 @@ namespace Qlik2DataRobot
 
             MemoryStream result = new MemoryStream();
 
-            string[] zipped_request_types = { "actuals", "dataset", "datasetversion", "createproject"};
+            string[] zipped_request_types = { "actuals", "dataset", "datasetversion", "createproject", "batchpred"};
 
             if (zipped_request_types.Contains(config.request_type))
             {
@@ -208,6 +208,19 @@ namespace Qlik2DataRobot
                         Logger.Trace($"{reqHash} - Dataset name: '{dataset_name}'");
 
                         result = await dr.SendActualsAsync(host, api_token, zip_stream, deployment_id, keyField, dataset_name, dataset_id);
+                        break;
+
+                    case "batchpred":
+                        Logger.Info($"{reqHash} - Sending batch prediction");
+                        Logger.Info($"{reqHash} - dataset_id (optional): '{dataset_id}'");
+                        if (String.IsNullOrEmpty(dataset_name))
+                        {
+                            dataset_name = "Batch Prediction";
+                        }
+
+                        Logger.Trace($"{reqHash} - Dataset name: '{dataset_name}'");
+
+                        result = await dr.ScoreBatchAsync(host, api_token, zip_stream, deployment_id, keyField, dataset_name, dataset_id);
                         break;
 
                     case "dataset":

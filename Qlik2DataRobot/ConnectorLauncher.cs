@@ -1,5 +1,6 @@
 ﻿using Grpc.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Newtonsoft.Json;
 using NLog;
 using Prometheus;
 using System;
@@ -42,8 +43,9 @@ namespace Qlik2DataRobot
 
         private Server server;
 
-        public void Launch(bool isService)
+        public async void Launch(bool isService)
         {
+
             var appSettings = ConfigurationManager.AppSettings;
             var metricsRunningPort = -1;
 
