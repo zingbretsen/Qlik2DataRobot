@@ -300,7 +300,6 @@ namespace Qlik2DataRobot
                 Logger.Trace($"{reqHash} - Status Code: {response.StatusCode}");
 
                 string responseContent = await response.Content.ReadAsStringAsync();
-                return responseContent;
             }
             catch (Exception e)
             {
@@ -389,7 +388,7 @@ namespace Qlik2DataRobot
             Logger.Trace($"{reqHash} - jobId: {jobId}");
 
             int counter=0;
-            while (counter < 60 && !(status.Contains("COMPLETE") || status.Contains("ERROR"))) {
+            while (counter < 60 && !(status.Contains("COMPLETE") || status.Contains("ERROR") || status.Contains("ABORT"))) {
                 counter = counter + 1;
                 Logger.Trace($"{reqHash} - status: {status}");
                 Thread.Sleep(5000);
@@ -403,8 +402,6 @@ namespace Qlik2DataRobot
                     responseobj = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(responseContent);
                     responseobj.TryGetValue("status", out status);
                 } else {
-                    Console.WriteLine(jobIdStr );
-                    Console.WriteLine(status );
                 }
             }
 
@@ -412,8 +409,9 @@ namespace Qlik2DataRobot
                 throw new ApplicationException("Prediction Job didn't finish successfully.");
             }
 
-            Console.WriteLine("Trying to download predictions!");
+
             Uri downloadUrl = new Uri($"{baseAddress}batchPredictions/{jobIdStr}/download");
+            Logger.Trace($"{reqHash} - download url: {$"{baseAddress}batchPredictions/{jobIdStr}/download"}");
             response = await checkRedirectAuth(client, await client.GetAsync(downloadUrl), downloadUrl);
             responseContent = await response.Content.ReadAsStringAsync();
 
@@ -446,7 +444,7 @@ namespace Qlik2DataRobot
             }
 
             Logger.Trace($"{reqHash} - Starting Batch Scoring");
-            string csv = await SubmitBatch(host, token, deploymentId, datasetId);
+            string csv = await SubmitBatch(host, token, deploymentId, catalogId);
             Logger.Trace($"{reqHash} - Finished Batch Scoring");
 
             Console.WriteLine("Start of retrieved data:");

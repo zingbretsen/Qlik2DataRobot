@@ -43,7 +43,7 @@ namespace Qlik2DataRobot
 
         private Server server;
 
-        public async void Launch(bool isService)
+        public void Launch(bool isService)
         {
 
             var appSettings = ConfigurationManager.AppSettings;
