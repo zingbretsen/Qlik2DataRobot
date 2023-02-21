@@ -45,7 +45,7 @@ namespace Qlik2DataRobot
 
         public void Launch(bool isService)
         {
-
+           
             var appSettings = ConfigurationManager.AppSettings;
             var metricsRunningPort = -1;
 

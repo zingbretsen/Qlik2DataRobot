@@ -14,6 +14,8 @@ using Newtonsoft.Json;
 using CsvHelper;
 using System.Reflection;
 using System.IO.Pipes;
+using Microsoft.Extensions.Options;
+using System.Globalization;
 
 namespace Qlik2DataRobot
 {
@@ -166,7 +168,6 @@ namespace Qlik2DataRobot
         /// </summary>
         private async Task<MemoryStream> SelectFunction(RequestSpecification config, MemoryStream rowdatastream, int reqHash)
         {
-           
             Logger.Info($"{reqHash} - Start DataRobot");
             DataRobotRestRequest dr = new DataRobotRestRequest(reqHash);
            
@@ -175,7 +176,7 @@ namespace Qlik2DataRobot
             string host = config.auth_config.endpoint;
             string mlops_host = config.mlops_endpoint;
             if (host.Substring(host.Length - 2) != "/") host = host + "/";
-            if (mlops_host.Substring(mlops_host.Length - 2) != "/") mlops_host = mlops_host + "/";
+            if (!String.IsNullOrEmpty(mlops_host) && mlops_host.Substring(mlops_host.Length - 2) != "/") mlops_host = mlops_host + "/";
 
             string project_id = config.project_id;
             string project_name = Convert.ToString(config.project_name);
@@ -189,7 +190,7 @@ namespace Qlik2DataRobot
             MemoryStream result = new MemoryStream();
 
             string[] zipped_request_types = { "actuals", "dataset", "datasetversion", "createproject", "batchpred"};
-
+            Logger.Info($"{reqHash} - Entering if");
             if (zipped_request_types.Contains(config.request_type))
             {
                 var zip_stream = await CompressStream(rowdatastream, dataset_name, reqHash);
@@ -456,10 +457,75 @@ namespace Qlik2DataRobot
                 //Dictionary<string, dynamic> response = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(data);
                 ResponseSpecification response = JsonConvert.DeserializeObject<ResponseSpecification>(data);
                 Logger.Trace($"{reqHash} - Returned Data: {data}");
-              
 
-                if (response.data != null)
+                if (response.csvdata != null)
                 {
+                    var reader = new StringReader(response.csvdata);
+                    var config = new CsvHelper.Configuration.Configuration(CultureInfo.InvariantCulture)
+                    {
+                        HasHeaderRecord = true,
+                    };
+                    var csvReader = new CsvReader(reader, config);
+
+                    csvReader.Read();
+                    csvReader.ReadHeader();
+
+                    var bundledRows = new BundledRows();
+
+                    Logger.Info("Reading records");
+                    var records = csvReader.GetRecords<dynamic>().ToList();
+
+                    int count = records.Count;
+                    int i = 0;
+                    foreach (dynamic record in records)
+                    {
+                        int j = 0;
+                        var row = new Row();
+                        foreach (dynamic field in record)
+                        {
+                            j += 1;                           
+                            row.Duals.Add(new Dual() { StrData = Convert.ToString(field.Value) ?? "" });
+                            
+                        }
+
+                        bundledRows.Rows.Add(row);
+
+                        if (i == 0)
+                        {
+                            nrOfCols = j;
+                            
+                            foreach (dynamic field in record)
+                            {
+                                var a = new ResultDataColumn();
+                                a.Name = field.Key;
+                                a.DataType = DataType.String;
+                                resultDataColumns.Add(a);
+                            }
+                            Logger.Info("Sending headers");
+                            await GenerateAndSendHeadersAsync(context, count, nrOfCols, resultDataColumns, cacheResultInQlik);
+                        }
+                        i += 1;
+                        
+                        if (i % 1000 == 0) {
+                            nrOfRows = i;
+                            Logger.Info("Sending batch");
+                            await responseStream.WriteAsync(bundledRows);
+                            bundledRows = new BundledRows();
+                        }
+                    }
+                    nrOfRows = i;
+                    if (i > 0)
+                    {
+                        Logger.Info($"Sending final batch");
+                        
+                        await responseStream.WriteAsync(bundledRows);
+                        bundledRows = null;
+                    }
+                    
+                } 
+                else if (response.data != null)
+                {
+                    
                     Logger.Trace($"{reqHash} - Response Data: {response.data}");
 
                     //Sort the response by RowId
@@ -476,7 +542,7 @@ namespace Qlik2DataRobot
                             resultDataColumns.Add(pe);
                         }
                     }
-                        
+
 
                     //Prediction Column
                     var a = new ResultDataColumn();
@@ -530,7 +596,7 @@ namespace Qlik2DataRobot
                         originalFormatTimestamp.Name = "originalFormatTimestamp";
                         originalFormatTimestamp.DataType = DataType.String;
 
-                      
+
 
                         resultDataColumns.Add(rowId);
                         resultDataColumns.Add(seriesId);
@@ -559,7 +625,7 @@ namespace Qlik2DataRobot
                             }
                         }
                     }
-                        
+
 
                     nrOfRows = sortedData.Count;
                     nrOfCols = resultDataColumns.Count;
@@ -578,7 +644,7 @@ namespace Qlik2DataRobot
                     {
                         var row = new Row();
 
-                        if(request_type != "timeseries")
+                        if (request_type != "timeseries")
                         {
                             if (shouldExplain && rawExplain)
                             {
@@ -593,7 +659,7 @@ namespace Qlik2DataRobot
 
                             }
                         }
-                        
+
 
                         //Prediction Column
                         row.Duals.Add(new Dual() { StrData = Convert.ToString(p.prediction) ?? "" });
@@ -629,23 +695,23 @@ namespace Qlik2DataRobot
                         //Include Prediction Explanations
                         if (shouldExplain && !rawExplain)
                         {
-                                foreach(PredictionExplanationSpecification pe in p.predictionExplanations)
-                                {
-                                    row.Duals.Add(new Dual() { StrData = Convert.ToString(pe.label) ?? "" });
-                                    row.Duals.Add(new Dual() { StrData = Convert.ToString(pe.feature) ?? "" });
-                                    row.Duals.Add(new Dual() { StrData = Convert.ToString(pe.featureValue) ?? "" });
-                                    row.Duals.Add(new Dual() { StrData = Convert.ToString(pe.strength) ?? "" });
-                                    row.Duals.Add(new Dual() { StrData = Convert.ToString(pe.qualitativeStrength) ?? "" });
-                                }
+                            foreach (PredictionExplanationSpecification pe in p.predictionExplanations)
+                            {
+                                row.Duals.Add(new Dual() { StrData = Convert.ToString(pe.label) ?? "" });
+                                row.Duals.Add(new Dual() { StrData = Convert.ToString(pe.feature) ?? "" });
+                                row.Duals.Add(new Dual() { StrData = Convert.ToString(pe.featureValue) ?? "" });
+                                row.Duals.Add(new Dual() { StrData = Convert.ToString(pe.strength) ?? "" });
+                                row.Duals.Add(new Dual() { StrData = Convert.ToString(pe.qualitativeStrength) ?? "" });
+                            }
 
-                                for(int j = p.predictionExplanations.Count; j < explain_max; j++)
-                                {
-                                    row.Duals.Add(new Dual() { });
-                                    row.Duals.Add(new Dual() { });
-                                    row.Duals.Add(new Dual() { });
-                                    row.Duals.Add(new Dual() { });
-                                    row.Duals.Add(new Dual() { });
-                                }
+                            for (int j = p.predictionExplanations.Count; j < explain_max; j++)
+                            {
+                                row.Duals.Add(new Dual() { });
+                                row.Duals.Add(new Dual() { });
+                                row.Duals.Add(new Dual() { });
+                                row.Duals.Add(new Dual() { });
+                                row.Duals.Add(new Dual() { });
+                            }
                         }
 
                         //Add the row the bundle
@@ -661,7 +727,7 @@ namespace Qlik2DataRobot
                             bundledRows = new BundledRows();
                         }
                         i++;
-                    }        
+                    }
 
                     //Send any left over rows after the final loop
                     if (bundledRows.Rows.Count() > 0)
@@ -670,10 +736,10 @@ namespace Qlik2DataRobot
                         await responseStream.WriteAsync(bundledRows);
                         bundledRows = null;
                     }
-                       
+
 
                 }
-                else if(response.response != null)
+                else if (response.response != null)
                 {
                     Logger.Trace($"{reqHash} - Processing Status Response for Project ID: {response.response.id}");
                     var a = new ResultDataColumn();
@@ -703,7 +769,7 @@ namespace Qlik2DataRobot
                     {
                         throw new Exception($"An Unknown Error Occured: {data}");
                     }
-                    
+
                 }
 
                 

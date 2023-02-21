@@ -1,10 +1,14 @@
 ﻿using CsvHelper;
+using System.Collections.Generic;
+using System.Globalization;
+using CsvHelper.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NLog;
 using System;
 using System.CodeDom;
 using System.Collections.Generic;
+using System.Globalization;
 // using System.Data;
 using System.IO;
 using System.Net;
@@ -14,7 +18,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-
+using System.Linq;
 
 namespace Qlik2DataRobot
 {
@@ -240,7 +244,7 @@ namespace Qlik2DataRobot
             return processingState;
         }
 
-        public class batchPredictionOptions
+        public class actualsOptions
         {
             public string datasetId { get; set; }
             public string associationIdColumn { get; set; }
@@ -254,7 +258,7 @@ namespace Qlik2DataRobot
             ConfigureAsync(client, baseAddress, token);
             Logger.Trace($"{reqHash} - Configured Client");
 
-            batchPredictionOptions options = new batchPredictionOptions
+            actualsOptions options = new actualsOptions
             {
                 datasetId = datasetId,
                 associationIdColumn = associationIdColumn,
@@ -264,28 +268,6 @@ namespace Qlik2DataRobot
 
             string json = JsonConvert.SerializeObject(options);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
-            Console.Write(json);
-            //var requestContent = new MultipartFormDataContent("----");
-
-            //Logger.Trace($"{reqHash} - Adding Dataset ID: {datasetId}");
-            //StringContent sDatasetId = new StringContent(datasetId);
-            //requestContent.Add(sDatasetId, "\"datasetId\"");
-
-            //Logger.Trace($"{reqHash} - Adding Association ID Column: {associationIdColumn}");
-            ////assocationIdCol = "IdentifierID";
-            //StringContent sAssociationIdCol = new StringContent(associationIdColumn);
-            //requestContent.Add(sAssociationIdCol, "\"associationIdColumn\"");
-
-            ////actualValueColumn = "Target";
-            //Logger.Trace($"{reqHash} - Adding Actual Value Column: {actualValueColumn}");
-            //StringContent sActualDataCol = new StringContent(actualValueColumn);
-            //requestContent.Add(sActualDataCol, "\"actualValueColumn\"");
-
-            //Logger.Trace($"{reqHash} - Building Request Headers");
-            //Logger.Trace($"{reqHash} - Headers: {requestContent.Headers}");
-            //Logger.Trace($"{reqHash} - Request Content: {requestContent}");
-            //Logger.Trace($"{reqHash} - Finished Building Request");
-
 
             string url = $"deployments/{deploymentId}/actuals/fromDataset/";
 
@@ -294,7 +276,6 @@ namespace Qlik2DataRobot
 
             try
             {
-                //HttpResponseMessage response = await checkRedirectAuth(client, await client.PostAsync(url, requestContent), null);
                 HttpResponseMessage response = await checkRedirectAuth(client, await client.PostAsync(url, content), null);
                 Logger.Trace($"{reqHash} - Submitting Actuals");
                 Logger.Trace($"{reqHash} - Status Code: {response.StatusCode}");
@@ -447,16 +428,20 @@ namespace Qlik2DataRobot
             string csv = await SubmitBatch(host, token, deploymentId, catalogId);
             Logger.Trace($"{reqHash} - Finished Batch Scoring");
 
-            Console.WriteLine("Start of retrieved data:");
-            Console.WriteLine(csv.Substring(0, 200));
 
-            streamWriter.WriteLine("{\"status\":\"" + "success" + "\",\"response\":{\"data\":\"" + csv + "\"}}");
+            ResponseSpecification resp = new ResponseSpecification
+            {
+                status = "success",
+                csvdata = csv
+            };
+            
+            streamWriter.WriteLine(JsonConvert.SerializeObject(resp));
             streamWriter.Flush();
             outStream.Position = 0;
             return outStream;
         }
 
-
+        
         /// <summary>
         /// Send actual values to a deployment
         /// </summary>
