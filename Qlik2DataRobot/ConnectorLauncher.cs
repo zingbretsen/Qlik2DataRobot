@@ -1,19 +1,13 @@
 ﻿using Grpc.Core;
 using Microsoft.Extensions.DependencyInjection;
-using Newtonsoft.Json;
 using NLog;
 using Prometheus;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Configuration;
 using System.IO;
-using System.Linq;
 using System.Net.Http;
 using System.Reflection;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace Qlik2DataRobot
 {

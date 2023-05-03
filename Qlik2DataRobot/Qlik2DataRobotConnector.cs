@@ -13,8 +13,6 @@ using Qlik.Sse;
 using Newtonsoft.Json;
 using CsvHelper;
 using System.Reflection;
-using System.IO.Pipes;
-using Microsoft.Extensions.Options;
 using System.Globalization;
 
 namespace Qlik2DataRobot
@@ -221,7 +219,25 @@ namespace Qlik2DataRobot
 
                         Logger.Trace($"{reqHash} - Dataset name: '{dataset_name}'");
 
-                        result = await dr.ScoreBatchAsync(host, api_token, zip_stream, deployment_id, keyField, dataset_name, dataset_id);
+                        int maxCodes = 0;
+                        double thresholdHigh = 0.75;
+                        double thresholdLow = 0.25;
+                        bool explain = false;
+
+                        if (config.explain != null)
+                        {
+                            Logger.Info($"{reqHash} - {JsonConvert.SerializeObject(config.explain)}");
+                            maxCodes = config.explain.max_codes;
+                            thresholdHigh = config.explain.threshold_high;
+                            thresholdLow = config.explain.threshold_low;
+                            explain = true;
+                        }
+
+                        result = await dr.ScoreBatchAsync(host, api_token, zip_stream, deployment_id, keyField, dataset_name, dataset_id,
+                            maxCodes,
+                        thresholdHigh,
+                        thresholdLow,
+                        explain);
                         break;
 
                     case "dataset":

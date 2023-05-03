@@ -1,14 +1,7 @@
-﻿using CsvHelper;
-using System.Collections.Generic;
-using System.Globalization;
-using CsvHelper.Configuration;
+﻿using System.Collections.Generic;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using NLog;
 using System;
-using System.CodeDom;
-using System.Collections.Generic;
-using System.Globalization;
 // using System.Data;
 using System.IO;
 using System.Net;
@@ -19,6 +12,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
+using static System.ValueTuple;
 
 namespace Qlik2DataRobot
 {
@@ -310,6 +304,9 @@ namespace Qlik2DataRobot
             public string chunkSize { get; set; }
             public bool includePredictionStatus { get; set; }
             public intakeOptions intakeSettings { get; set; }
+            public int? maxExplanations { get; set; }
+            public double? thresholdHigh { get; set; }
+            public double? thresholdLow { get; set; }
         }
 
         class redirectLinks {
@@ -326,7 +323,11 @@ namespace Qlik2DataRobot
             bool skipDriftTracking = false,
             bool predictionWarningEnabled = false,
             string chunkSize = "auto",
-            bool includePredictionStatus = true
+            bool includePredictionStatus = true,
+            int maxCodes = 0,
+            double thresholdHigh = 0,
+            double thresholdLow = 0,
+            bool explain = false
             )
         {
             Logger.Trace($"{reqHash} - Create Client");
@@ -334,20 +335,45 @@ namespace Qlik2DataRobot
             ConfigureAsync(client, baseAddress, token);
 
             Logger.Trace($"{reqHash} - Configuring batch options");
-            batchOptions options = new batchOptions
+            batchOptions options;
+            if (!explain)
             {
-                deploymentId = deploymentId,
-                passthroughColumnsSet = passthroughColumnsSet,
-                skipDriftTracking = skipDriftTracking,
-                predictionWarningEnabled = predictionWarningEnabled,
-                chunkSize = chunkSize,
-                includePredictionStatus = includePredictionStatus,
-                intakeSettings = new intakeOptions
+                options = new batchOptions
                 {
-                    type = "dataset",
-                    datasetId = datasetId
-                }
-            };
+                    deploymentId = deploymentId,
+                    passthroughColumnsSet = passthroughColumnsSet,
+                    skipDriftTracking = skipDriftTracking,
+                    predictionWarningEnabled = predictionWarningEnabled,
+                    chunkSize = chunkSize,
+                    includePredictionStatus = includePredictionStatus,
+                    intakeSettings = new intakeOptions
+                    {
+                        type = "dataset",
+                        datasetId = datasetId
+                    }
+                };
+                
+            } else
+            {
+                options = new batchOptions
+                {
+                    deploymentId = deploymentId,
+                    passthroughColumnsSet = passthroughColumnsSet,
+                    skipDriftTracking = skipDriftTracking,
+                    predictionWarningEnabled = predictionWarningEnabled,
+                    chunkSize = chunkSize,
+                    includePredictionStatus = includePredictionStatus,
+                    intakeSettings = new intakeOptions
+                    {
+                        type = "dataset",
+                        datasetId = datasetId
+                    },
+                    maxExplanations = maxCodes,
+                    thresholdHigh = thresholdHigh,
+                    thresholdLow = thresholdLow
+                };
+            }
+
             string json = JsonConvert.SerializeObject(options);
             Console.WriteLine($"Sending BatchPrediction requestion with the following config: {json}");
             var httpContent = new StringContent(json, Encoding.UTF8, "application/json");
@@ -402,10 +428,19 @@ namespace Qlik2DataRobot
         /// <summary>
         /// Send actual values to a deployment
         /// </summary>
-        public async Task<MemoryStream> ScoreBatchAsync(string host, string token, MemoryStream data, string deploymentId, string keyField, string dataset_name = "Batch", string datasetId = "")
+        public async Task<MemoryStream> ScoreBatchAsync(string host, string token, MemoryStream data, string deploymentId,
+            string keyField, string dataset_name = "Batch", string datasetId = "",
+                            int maxCodes = 0,
+                        double thresholdHigh = 0,
+                        double thresholdLow = 0,
+                        bool explain = false)
         {
 
             Logger.Trace($"{reqHash} - Starting Send Batch");
+            Logger.Info($"{reqHash} - {explain}");
+            Logger.Info($"{reqHash} - {maxCodes}");
+            Logger.Info($"{reqHash} - {thresholdHigh}");
+            Logger.Info($"{reqHash} - {thresholdLow}");
             MemoryStream outStream = new MemoryStream();
             var streamWriter = new StreamWriter(outStream);
 
@@ -425,7 +460,11 @@ namespace Qlik2DataRobot
             }
 
             Logger.Trace($"{reqHash} - Starting Batch Scoring");
-            string csv = await SubmitBatch(host, token, deploymentId, catalogId);
+            string csv = await SubmitBatch(host, token, deploymentId, catalogId,
+                maxCodes: maxCodes, 
+                thresholdHigh: thresholdHigh, 
+                thresholdLow: thresholdLow, 
+                explain: explain);
             Logger.Trace($"{reqHash} - Finished Batch Scoring");
 
 
