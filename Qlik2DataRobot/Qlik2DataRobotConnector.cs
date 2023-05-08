@@ -185,6 +185,9 @@ namespace Qlik2DataRobot
             string dataset_name = Convert.ToString(config.dataset_name);
             string dataset_id = Convert.ToString(config.dataset_id);
 
+            string association_id_name = Convert.ToString(config.association_id_name);
+            string target_name = Convert.ToString(config.target_name);
+
             MemoryStream result = new MemoryStream();
 
             string[] zipped_request_types = { "actuals", "dataset", "datasetversion", "createproject", "batchpred"};
@@ -206,7 +209,7 @@ namespace Qlik2DataRobot
 
                         Logger.Trace($"{reqHash} - Dataset name: '{dataset_name}'");
 
-                        result = await dr.SendActualsAsync(host, api_token, zip_stream, deployment_id, keyField, dataset_name, dataset_id);
+                        result = await dr.SendActualsAsync(host, api_token, zip_stream, deployment_id, keyField, dataset_name, dataset_id, associationIdColumn: association_id_name, actualValueColumn: target_name);
                         break;
 
                     case "batchpred":

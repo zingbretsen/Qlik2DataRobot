@@ -38,6 +38,9 @@ namespace Qlik2DataRobot
         [DefaultValue("s")]
         [JsonProperty(DefaultValueHandling = DefaultValueHandling.Populate)]
         public string timestamp_format { get; set; }
+
+        public string association_id_name { get; set; }
+        public string target_name { get; set; }
     }
 
     class AuthConfigSpecification
