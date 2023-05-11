@@ -13,6 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 using static System.ValueTuple;
+using System.ComponentModel;
 
 namespace Qlik2DataRobot
 {
@@ -304,8 +305,14 @@ namespace Qlik2DataRobot
             public string chunkSize { get; set; }
             public bool includePredictionStatus { get; set; }
             public intakeOptions intakeSettings { get; set; }
+
+            [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
             public int? maxExplanations { get; set; }
+
+            [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
             public double? thresholdHigh { get; set; }
+
+            [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
             public double? thresholdLow { get; set; }
         }
 
@@ -336,8 +343,9 @@ namespace Qlik2DataRobot
 
             Logger.Trace($"{reqHash} - Configuring batch options");
             batchOptions options;
-            if (!explain)
+            if (explain == false)
             {
+                Logger.Info($"{reqHash} - Configuring batch options without explain");
                 options = new batchOptions
                 {
                     deploymentId = deploymentId,
@@ -352,9 +360,11 @@ namespace Qlik2DataRobot
                         datasetId = datasetId
                     }
                 };
-                
+                Logger.Info($"{reqHash} - options {JsonConvert.SerializeObject(options)}");
+
             } else
             {
+                Logger.Info($"{reqHash} - Configuring batch options with explain");
                 options = new batchOptions
                 {
                     deploymentId = deploymentId,

@@ -226,7 +226,7 @@ namespace Qlik2DataRobot
                         double thresholdHigh = 0.75;
                         double thresholdLow = 0.25;
                         bool explain = false;
-
+                        Logger.Trace($"{reqHash} - config.explain: '{config.explain}'");
                         if (config.explain != null)
                         {
                             Logger.Info($"{reqHash} - {JsonConvert.SerializeObject(config.explain)}");
@@ -234,6 +234,18 @@ namespace Qlik2DataRobot
                             thresholdHigh = config.explain.threshold_high;
                             thresholdLow = config.explain.threshold_low;
                             explain = true;
+                            Logger.Trace($"{reqHash} - yes config.explain");
+                            Logger.Trace($"{reqHash} - maxCodes: '{maxCodes}'");
+                            Logger.Trace($"{reqHash} - thresholdHigh: '{thresholdHigh}'");
+                            Logger.Trace($"{reqHash} - thresholdLow: '{thresholdLow}'");
+                            Logger.Trace($"{reqHash} - explain: '{explain}'");
+                        } else
+                        {
+                            Logger.Trace($"{reqHash} - No config.explain");
+                            Logger.Trace($"{reqHash} - maxCodes: '{maxCodes}'");
+                            Logger.Trace($"{reqHash} - thresholdHigh: '{thresholdHigh}'");
+                            Logger.Trace($"{reqHash} - thresholdLow: '{thresholdLow}'");
+                            Logger.Trace($"{reqHash} - explain: '{explain}'");
                         }
 
                         result = await dr.ScoreBatchAsync(host, api_token, zip_stream, deployment_id, keyField, dataset_name, dataset_id,
