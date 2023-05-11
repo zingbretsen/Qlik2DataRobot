@@ -360,11 +360,9 @@ namespace Qlik2DataRobot
                         datasetId = datasetId
                     }
                 };
-                Logger.Info($"{reqHash} - options {JsonConvert.SerializeObject(options)}");
-
+                
             } else
             {
-                Logger.Info($"{reqHash} - Configuring batch options with explain");
                 options = new batchOptions
                 {
                     deploymentId = deploymentId,
