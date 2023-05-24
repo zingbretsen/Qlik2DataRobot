@@ -520,7 +520,11 @@ namespace Qlik2DataRobot
                                 resultDataColumns.Add(a);
                             }
                             Logger.Info("Sending headers");
+                            Logger.Info($"Headers count: {count}");
+                            Logger.Info($"Headers nrOfCols: {nrOfCols}");
+                            Logger.Info($"Headers resultDataColumns: {resultDataColumns}");
                             await GenerateAndSendHeadersAsync(context, count, nrOfCols, resultDataColumns, cacheResultInQlik);
+                            Logger.Info("Sent headers");
                         }
                         i += 1;
                         
@@ -823,12 +827,12 @@ namespace Qlik2DataRobot
                     });
                 }
             }
-
+            Logger.Info("Generating Metadata");
             var tableMetadata = new Metadata
                     {
                         { new Metadata.Entry("qlik-tabledescription-bin", MessageExtensions.ToByteArray(tableDesc)) }
                     };
-
+            Logger.Info($"Generating Metadata");
             if (!cacheResultInQlik)
             {
                 tableMetadata.Add("qlik-cache", "no-store");

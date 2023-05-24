@@ -299,7 +299,6 @@ namespace Qlik2DataRobot
         public class batchOptions
         {
             public string deploymentId { get; set; }
-            public string passthroughColumnsSet { get; set; }
             public bool skipDriftTracking { get; set; }
             public bool predictionWarningEnabled { get; set; }
             public string chunkSize { get; set; }
@@ -326,7 +325,6 @@ namespace Qlik2DataRobot
             string token,
             string deploymentId,
             string datasetId,
-            string passthroughColumnsSet="all",
             bool skipDriftTracking = false,
             bool predictionWarningEnabled = false,
             string chunkSize = "auto",
@@ -349,7 +347,6 @@ namespace Qlik2DataRobot
                 options = new batchOptions
                 {
                     deploymentId = deploymentId,
-                    passthroughColumnsSet = passthroughColumnsSet,
                     skipDriftTracking = skipDriftTracking,
                     predictionWarningEnabled = predictionWarningEnabled,
                     chunkSize = chunkSize,
@@ -366,7 +363,6 @@ namespace Qlik2DataRobot
                 options = new batchOptions
                 {
                     deploymentId = deploymentId,
-                    passthroughColumnsSet = passthroughColumnsSet,
                     skipDriftTracking = skipDriftTracking,
                     predictionWarningEnabled = predictionWarningEnabled,
                     chunkSize = chunkSize,
