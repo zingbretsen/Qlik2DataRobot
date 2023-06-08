@@ -41,6 +41,9 @@ namespace Qlik2DataRobot
 
         public string association_id_name { get; set; }
         public string target_name { get; set; }
+
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string passthroughColumnsSet { get; set; }
     }
 
     class AuthConfigSpecification

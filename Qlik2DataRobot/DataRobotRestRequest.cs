@@ -123,10 +123,8 @@ namespace Qlik2DataRobot
 
         public async Task<string> SendDataset(string baseAddress, string token, MemoryStream data, string datasetName, StreamWriter streamWriter, string datasetId = "")
         {
-            Logger.Trace($"{reqHash} - Create Client");
             var client = Qlik2DataRobotHttpClientFactory.clientFactory.CreateClient();
             ConfigureAsync(client, baseAddress, token);
-            Logger.Trace($"{reqHash} - Configured Client");
 
             var requestContent = new MultipartFormDataContent("----");
 
@@ -143,7 +141,7 @@ namespace Qlik2DataRobot
             Logger.Trace($"{reqHash} - Headers: {requestContent.Headers}");
             Logger.Trace($"{reqHash} - Finished Building Request");
 
-            Logger.Trace($"{reqHash} - Dataset ID: '{datasetId}'");
+            Logger.Info($"{reqHash} - Dataset ID: '{datasetId}'");
             var url = "datasets";
             if (String.IsNullOrEmpty(datasetId))
             {
@@ -313,6 +311,9 @@ namespace Qlik2DataRobot
 
             [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
             public double? thresholdLow { get; set; }
+
+            [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+            public string passthroughColumnsSet { get; set; }
         }
 
         class redirectLinks {
@@ -325,6 +326,7 @@ namespace Qlik2DataRobot
             string token,
             string deploymentId,
             string datasetId,
+            string passthroughColumnsSet,
             bool skipDriftTracking = false,
             bool predictionWarningEnabled = false,
             string chunkSize = "auto",
@@ -355,7 +357,8 @@ namespace Qlik2DataRobot
                     {
                         type = "dataset",
                         datasetId = datasetId
-                    }
+                    },
+                    passthroughColumnsSet = passthroughColumnsSet
                 };
                 
             } else
@@ -374,18 +377,22 @@ namespace Qlik2DataRobot
                     },
                     maxExplanations = maxCodes,
                     thresholdHigh = thresholdHigh,
-                    thresholdLow = thresholdLow
+                    thresholdLow = thresholdLow,
+                    passthroughColumnsSet = passthroughColumnsSet
                 };
             }
-
+            Logger.Info($"{reqHash} - Made options");
+            Logger.Info($"{reqHash} - Serializing options");
             string json = JsonConvert.SerializeObject(options);
             Console.WriteLine($"Sending BatchPrediction requestion with the following config: {json}");
             var httpContent = new StringContent(json, Encoding.UTF8, "application/json");
-
+            Logger.Info($"{reqHash} - Built httpContent");
             string uri = $"batchPredictions/";
+            Logger.Info($"{reqHash} - Sending to {uri}");
             HttpResponseMessage response = await client.PostAsync(uri, httpContent);
+            
             string responseContent = await response.Content.ReadAsStringAsync();
-
+            Logger.Info($"{reqHash} - resp: {JsonConvert.SerializeObject(responseContent)}");
             Logger.Trace($"{reqHash} - Parsing response: {responseContent}");
             Dictionary<string, dynamic> responseobj = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(responseContent);
             dynamic status;
@@ -432,12 +439,18 @@ namespace Qlik2DataRobot
         /// <summary>
         /// Send actual values to a deployment
         /// </summary>
-        public async Task<MemoryStream> ScoreBatchAsync(string host, string token, MemoryStream data, string deploymentId,
-            string keyField, string dataset_name = "Batch", string datasetId = "",
-                            int maxCodes = 0,
-                        double thresholdHigh = 0,
-                        double thresholdLow = 0,
-                        bool explain = false)
+        public async Task<MemoryStream> ScoreBatchAsync(string host,
+            string token,
+            MemoryStream data,
+            string deploymentId,
+            string keyField,
+            string passthroughColumnsSet,
+            string dataset_name = "Batch",
+            string datasetId = "",
+            int maxCodes = 0,
+            double thresholdHigh = 0,
+            double thresholdLow = 0,
+            bool explain = false)
         {
 
             Logger.Trace($"{reqHash} - Starting Send Batch");
@@ -445,9 +458,10 @@ namespace Qlik2DataRobot
             Logger.Info($"{reqHash} - {maxCodes}");
             Logger.Info($"{reqHash} - {thresholdHigh}");
             Logger.Info($"{reqHash} - {thresholdLow}");
+            Logger.Info($"{reqHash} - {passthroughColumnsSet}");
             MemoryStream outStream = new MemoryStream();
             var streamWriter = new StreamWriter(outStream);
-
+            Logger.Info($"{reqHash} - Got mem stream and writer");
             Logger.Trace($"{reqHash} - Sending Dataset");
             string catalogId = await SendDataset(host, token, data, dataset_name, streamWriter, datasetId);
 
@@ -468,7 +482,8 @@ namespace Qlik2DataRobot
                 maxCodes: maxCodes, 
                 thresholdHigh: thresholdHigh, 
                 thresholdLow: thresholdLow, 
-                explain: explain);
+                explain: explain,
+                passthroughColumnsSet: passthroughColumnsSet);
             Logger.Trace($"{reqHash} - Finished Batch Scoring");
 
 

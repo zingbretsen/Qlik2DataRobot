@@ -188,6 +188,8 @@ namespace Qlik2DataRobot
             string association_id_name = Convert.ToString(config.association_id_name);
             string target_name = Convert.ToString(config.target_name);
 
+            string passthroughColumnsSet = config.passthroughColumnsSet;
+
             MemoryStream result = new MemoryStream();
 
             string[] zipped_request_types = { "actuals", "dataset", "datasetversion", "createproject", "batchpred"};
@@ -235,7 +237,8 @@ namespace Qlik2DataRobot
                             explain = true;
                         }
 
-                        result = await dr.ScoreBatchAsync(host, api_token, zip_stream, deployment_id, keyField, dataset_name, dataset_id,
+                        result = await dr.ScoreBatchAsync(host, api_token, zip_stream, deployment_id, keyField,
+                        passthroughColumnsSet, dataset_name, dataset_id,
                             maxCodes,
                         thresholdHigh,
                         thresholdLow,
@@ -474,7 +477,6 @@ namespace Qlik2DataRobot
                 var data = sr.ReadToEnd();
                 //Dictionary<string, dynamic> response = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(data);
                 ResponseSpecification response = JsonConvert.DeserializeObject<ResponseSpecification>(data);
-                Logger.Trace($"{reqHash} - Returned Data: {data}");
 
                 if (response.csvdata != null)
                 {
