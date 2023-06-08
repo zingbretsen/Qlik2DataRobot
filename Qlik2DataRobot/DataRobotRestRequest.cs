@@ -28,12 +28,6 @@ namespace Qlik2DataRobot
             reqHash = _reqHash;
         }
 
-        public class Foo
-        {
-            public string columnA { get; set; }
-            public string columnB { get; set; }
-        }
-
 
         /// <summary>
         /// Create a datarobot dataset
@@ -123,8 +117,10 @@ namespace Qlik2DataRobot
 
         public async Task<string> SendDataset(string baseAddress, string token, MemoryStream data, string datasetName, StreamWriter streamWriter, string datasetId = "")
         {
+            Logger.Info($"{reqHash} - Create Client");
             var client = Qlik2DataRobotHttpClientFactory.clientFactory.CreateClient();
             ConfigureAsync(client, baseAddress, token);
+            Logger.Info($"{reqHash} - Configured Client");
 
             var requestContent = new MultipartFormDataContent("----");
 
