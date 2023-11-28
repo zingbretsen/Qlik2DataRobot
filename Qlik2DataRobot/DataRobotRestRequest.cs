@@ -125,7 +125,7 @@ namespace Qlik2DataRobot
 
             var fileContent = new StreamContent(data);
             fileContent.Headers.Add("Content-Disposition", "form-data; name=\"file\"; filename=\"" + datasetName + "\"");
-            fileContent.Headers.Add("Content-Encoding", "zip");
+            //fileContent.Headers.Add("Content-Encoding", "zip");
             fileContent.Headers.Add("Content-Type", "application/zip");
 
             Logger.Trace($"{reqHash} - Headers: {fileContent.Headers}");
