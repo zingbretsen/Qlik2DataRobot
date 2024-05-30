@@ -41,12 +41,25 @@ namespace Qlik2DataRobot
 
         //Explanations
         public List<PredictionExplanationSpecification> predictionExplanations { get; set; }
+
+        //Prediction Intervals
+        public Dictionary<string, PredictionIntervalSpecification> predictionIntervals { get; set; }
     }
 
     class PredictionValueSpecification
     {
         public string label { get; set; }
         public double value { get; set; }
+    }
+
+    class PredictionIntervalsSpecification
+    {
+        public Dictionary<string, PredictionIntervalSpecification> predictionInterval {get; set;}
+    }
+    class PredictionIntervalSpecification
+    {
+        public double low { get; set; }
+        public double high { get; set; }
     }
 
     class PredictionExplanationSpecification
