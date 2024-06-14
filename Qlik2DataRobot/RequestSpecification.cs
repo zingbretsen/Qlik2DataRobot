@@ -44,6 +44,8 @@ namespace Qlik2DataRobot
 
         [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string passthroughColumnsSet { get; set; }
+
+        public string prediction_interval { get; set; }
     }
 
     class AuthConfigSpecification

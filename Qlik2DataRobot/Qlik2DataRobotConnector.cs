@@ -14,6 +14,8 @@ using Newtonsoft.Json;
 using CsvHelper;
 using System.Reflection;
 using System.Globalization;
+using static System.Net.Mime.MediaTypeNames;
+using System.Text;
 
 namespace Qlik2DataRobot
 {
@@ -140,8 +142,8 @@ namespace Qlik2DataRobot
                 }
 
                 string request_type = config.request_type;
-
-                await GenerateResult(request_type, outData, responseStream, context, reqHash, cacheResultInQlik: shouldCache, keyField:keyField, keyname:keyname, includeDetail: inc_details, shouldExplain:shouldExplain, rawExplain:rawExplain, explain_max:max_codes);
+                string prediction_interval = config.prediction_interval;
+                await GenerateResult(request_type, outData, responseStream, context, reqHash, cacheResultInQlik: shouldCache, keyField:keyField, keyname:keyname, includeDetail: inc_details, shouldExplain:shouldExplain, rawExplain:rawExplain, explain_max:max_codes, prediction_interval: prediction_interval);
                 outData = null;
                 stopwatch.Stop();
                 Logger.Debug($"{reqHash} - Took {stopwatch.ElapsedMilliseconds} ms, hashid ({reqHash})");
@@ -323,7 +325,7 @@ namespace Qlik2DataRobot
             Logger.Debug($"{reqHash} - Start Compress");
             var outStream = new MemoryStream();
             
-                using (var archive = new ZipArchive(outStream, ZipArchiveMode.Create, true))
+                using (var archive = new ZipArchive(outStream, ZipArchiveMode.Create, true, Encoding.UTF8))
                 {
                     var fileInArchive = archive.CreateEntry(filename + ".csv", System.IO.Compression.CompressionLevel.Optimal);
                     using (var entryStream = fileInArchive.Open())
@@ -348,8 +350,7 @@ namespace Qlik2DataRobot
             var memStream = new MemoryStream();
             var streamWriter = new StreamWriter(memStream);
             var tw = TextWriter.Synchronized(streamWriter);
-            var config = new CsvHelper.Configuration.CsvConfiguration(CultureInfo.InvariantCulture);
-            var csv = new CsvWriter(tw, config);
+            var csv = new CsvWriter(tw);
 
             var keyindex = 0;
 
@@ -457,7 +458,7 @@ namespace Qlik2DataRobot
         /// Return the results from connector to Qlik Engine
         /// </summary>
         private async Task GenerateResult(string request_type, MemoryStream returnedData, IServerStreamWriter<global::Qlik.Sse.BundledRows> responseStream, ServerCallContext context, int reqHash,
-            bool failIfWrongDataTypeInFirstCol = false, DataType expectedFirstDataType = DataType.Numeric, bool cacheResultInQlik = true, ResultDataColumn keyField = null, string keyname = null, bool includeDetail = false, bool shouldExplain = false, bool rawExplain = false, int explain_max = 0)
+            bool failIfWrongDataTypeInFirstCol = false, DataType expectedFirstDataType = DataType.Numeric, bool cacheResultInQlik = true, ResultDataColumn keyField = null, string keyname = null, bool includeDetail = false, bool shouldExplain = false, bool rawExplain = false, int explain_max = 0, string prediction_interval = "")
         {
             
             int nrOfCols = 0;
@@ -476,13 +477,12 @@ namespace Qlik2DataRobot
                 StreamReader sr = new StreamReader(returnedData);
                 returnedData.Position = 0;
                 var data = sr.ReadToEnd();
-                //Dictionary<string, dynamic> response = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(data);
                 ResponseSpecification response = JsonConvert.DeserializeObject<ResponseSpecification>(data);
 
                 if (response.csvdata != null)
                 {
                     var reader = new StringReader(response.csvdata);
-                    var config = new CsvHelper.Configuration.CsvConfiguration(CultureInfo.InvariantCulture)
+                    var config = new CsvHelper.Configuration.Configuration(CultureInfo.InvariantCulture)
                     {
                         HasHeaderRecord = true,
                     };
@@ -621,8 +621,6 @@ namespace Qlik2DataRobot
                         originalFormatTimestamp.Name = "originalFormatTimestamp";
                         originalFormatTimestamp.DataType = DataType.String;
 
-
-
                         resultDataColumns.Add(rowId);
                         resultDataColumns.Add(seriesId);
                         resultDataColumns.Add(forecastPoint);
@@ -630,6 +628,20 @@ namespace Qlik2DataRobot
                         resultDataColumns.Add(forecastDistance);
                         resultDataColumns.Add(originalFormatTimestamp);
 
+
+                        if (prediction_interval != null && prediction_interval != "")
+                        {
+                            var predictionIntervalsLow = new ResultDataColumn();
+                            predictionIntervalsLow.Name = "predictionIntervalsLow_" + prediction_interval;
+                            predictionIntervalsLow.DataType = DataType.String;
+
+                            var predictionIntervalsHigh = new ResultDataColumn();
+                            predictionIntervalsHigh.Name = "predictionIntervalsHigh_" + prediction_interval;
+                            predictionIntervalsHigh.DataType = DataType.String;
+
+                            resultDataColumns.Add(predictionIntervalsLow);
+                            resultDataColumns.Add(predictionIntervalsHigh);
+                        }
                     }
 
 
@@ -715,6 +727,19 @@ namespace Qlik2DataRobot
                             row.Duals.Add(new Dual() { StrData = Convert.ToString(p.timestamp) ?? "" });
                             row.Duals.Add(new Dual() { StrData = Convert.ToString(p.forecastDistance) ?? "" });
                             row.Duals.Add(new Dual() { StrData = Convert.ToString(p.originalFormatTimestamp) ?? "" });
+
+                            if (prediction_interval != null && prediction_interval != "")
+                            {
+                                if (p.predictionIntervals != null && p.predictionIntervals.ContainsKey(prediction_interval))
+                                {
+                                    row.Duals.Add(new Dual() { StrData = Convert.ToString(p.predictionIntervals[prediction_interval].low) ?? "" });
+                                    row.Duals.Add(new Dual() { StrData = Convert.ToString(p.predictionIntervals[prediction_interval].high) ?? "" });
+                                } else
+                                {
+                                    row.Duals.Add(new Dual() { StrData = "" });
+                                    row.Duals.Add(new Dual() { StrData = "" });
+                                }
+                            }
                         }
 
                         //Include Prediction Explanations
